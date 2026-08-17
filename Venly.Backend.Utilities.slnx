@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Venly.Messaging.Events/Venly.Messaging.Events.csproj" />
+  <Project Path="Venly.Notification.Helper/Venly.Notification.Helper.csproj" />
+</Solution>
