@@ -1,0 +1,112 @@
+############################
+# Build Folders
+############################
+bin/
+obj/
+out/
+artifacts/
+*.td
+
+############################
+# User-specific files
+############################
+*.user
+*.userosscache
+*.suo
+*.rsuser
+*.userprefs
+
+############################
+# Visual Studio
+############################
+.vs/
+
+############################
+# Rider
+############################
+.idea/
+
+############################
+# VS Code
+############################
+.vscode/
+
+############################
+# Claude Code
+############################
+.claude/
+.claude.json
+.claude-config.json
+.claude-code/
+claude.json
+
+############################
+# Logs
+############################
+*.log
+logs/
+
+############################
+# OS Files
+############################
+.DS_Store
+Thumbs.db
+
+############################
+# Test Results
+############################
+TestResults/
+*.trx
+
+############################
+# NuGet
+############################
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+
+############################
+# Environment files
+############################
+.env
+.env.*
+appsettings.Development.json
+appsettings.Local.json
+appsettings.json
+appsettings.*.json
+appsettings.*.local.json
+# Keep committed templates/examples (no secrets)
+!appsettings.template.json
+!appsettings.example.json
+
+############################
+# Publish Output
+############################
+publish/
+*.publishsettings
+
+############################
+# Docker
+############################
+docker-compose.override.yml
+docker-compose.local.yml
+
+############################
+# Node (if frontend exists)
+############################
+node_modules/
+dist/
+build/
+
+############################
+# Coverage
+############################
+coverage/
+*.coverage
+*.coveragexml
+
+############################
+# SQL files
+############################
+*.sql%  
