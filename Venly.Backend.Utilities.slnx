@@ -1,5 +1,7 @@
 <Solution>
+  <Project Path="Venly.Backend.Common/Venly.Backend.Common.csproj" />
   <Project Path="Venly.Logger.Helper/Venly.Logger.Helper.csproj" />
   <Project Path="Venly.Messaging.Events/Venly.Messaging.Events.csproj" />
   <Project Path="Venly.Notification.Helper/Venly.Notification.Helper.csproj" />
+  <Project Path="Venly.Backend.Utilities.Tests/Venly.Backend.Utilities.Tests.csproj" />
 </Solution>
