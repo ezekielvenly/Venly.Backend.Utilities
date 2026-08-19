@@ -58,7 +58,6 @@ public class HmacAuthorizationFilter(
         var body = await new StreamReader(request.Body, Encoding.UTF8, leaveOpen: true).ReadToEndAsync();
         request.Body.Position = 0;
 
-        var bodyHash = ComputeSha256(body);
         var method = request.Method.ToUpperInvariant();
         var path = request.Path.Value ?? string.Empty;
 
@@ -72,10 +71,7 @@ public class HmacAuthorizationFilter(
             return;
         }
 
-        var signingString = string.IsNullOrWhiteSpace(nonce)
-            ? $"{timestamp}\n{method}\n{path}\n{bodyHash}"
-            : $"{timestamp}\n{nonce}\n{method}\n{path}\n{bodyHash}";
-        var expectedSignature = ComputeHmac(options.Value.Secret, signingString);
+        var expectedSignature = HmacSignature.Compute(options.Value.Secret, timestamp, method, path, body, nonce);
 
         if (!CryptographicOperations.FixedTimeEquals(
                 Encoding.UTF8.GetBytes(expectedSignature),
@@ -105,17 +101,5 @@ public class HmacAuthorizationFilter(
         {
             StatusCode = StatusCodes.Status401Unauthorized,
         };
-    }
-
-    private static string ComputeHmac(string secret, string data)
-    {
-        var hash = HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), Encoding.UTF8.GetBytes(data));
-        return Convert.ToBase64String(hash);
-    }
-
-    private static string ComputeSha256(string data)
-    {
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(data));
-        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 }
