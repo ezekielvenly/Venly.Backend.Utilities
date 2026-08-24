@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- For IHost/IServiceCollection/IConfiguration/ILogger. Same reference Venly.Backend.Common takes. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      This project exists so EF Core stays OUT of Venly.Backend.Common. Common is referenced by
+      GatewayService, which is a reverse proxy with no database — putting the migration runner there would
+      hand every gateway image an ORM it never calls. Held at the version the four DB-backed services already
+      reference, so a service and the runner cannot disagree about the EF version applying its own migrations.
+    -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.3" />
+    <PackageReference Include="Npgsql" Version="10.0.0" />
+    <!-- MigrateAsync and GetPendingMigrationsAsync are relational-only extensions on DatabaseFacade;
+         the base EntityFrameworkCore package does not carry them. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.3" />
+  </ItemGroup>
+
+</Project>

@@ -11,6 +11,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The client-facing half of Authentication/SendGramAuth.cs. Held at the same version as the gateway's
+         reference so the two cannot validate a token differently. -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.3" />
     <PackageReference Include="MediatR" Version="12.5.0" />
     <PackageReference Include="FluentValidation" Version="12.1.1" />
     <PackageReference Include="Confluent.Kafka" Version="2.6.1" />
