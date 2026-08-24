@@ -6,4 +6,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- For HmacSignature and RequestResponse. It carries FrameworkReference Microsoft.AspNetCore.App, which
+         is also where AddHttpClient, IOptions and ILogger come from — so no package references are needed
+         here beyond this one project. -->
+    <ProjectReference Include="..\Venly.Backend.Common\Venly.Backend.Common.csproj" />
+  </ItemGroup>
+
 </Project>
