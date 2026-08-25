@@ -25,7 +25,34 @@ public abstract class KafkaConsumerBase : BackgroundService
 
     protected virtual string KafkaGroupId => $"{_settings.ConsumerGroupId}.{Topic}";
 
-    protected abstract Task ProcessMessageAsync(string message, CancellationToken stoppingToken);
+    /// <summary>
+    /// Where a consumer with no committed offset starts. Latest by default, because that is right for a
+    /// consumer that ACTS on messages — a service restarting should not re-send a month of notifications.
+    ///
+    /// An ARCHIVER wants the opposite: starting at Latest means everything published before its first boot is
+    /// missing from the archive permanently, and "the archive is complete except for the bit before we turned
+    /// it on" is not an archive. It overrides this to Earliest.
+    /// </summary>
+    protected virtual AutoOffsetReset OffsetReset => AutoOffsetReset.Latest;
+
+    /// <summary>
+    /// The message body. Override this for the common case; override the <see cref="ConsumeResult{TKey,
+    /// TValue}"/> overload instead when the Kafka coordinates matter.
+    /// </summary>
+    protected virtual Task ProcessMessageAsync(string message, CancellationToken stoppingToken) =>
+        throw new NotImplementedException(
+            $"{GetType().Name} overrides neither ProcessMessageAsync overload.");
+
+    /// <summary>
+    /// The message WITH its Kafka coordinates. Override this instead of the string overload when partition,
+    /// offset or broker timestamp matter — an offset is the only monotonic sequence number a message has, and
+    /// a checkpoint is meaningless without one.
+    ///
+    /// The default forwards to the string overload, so every existing consumer is unaffected.
+    /// </summary>
+    protected virtual Task ProcessMessageAsync(
+        ConsumeResult<Ignore, string> result, CancellationToken stoppingToken) =>
+        ProcessMessageAsync(result.Message.Value, stoppingToken);
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
         => Task.Run(() => ConsumeLoop(stoppingToken), stoppingToken);
@@ -36,7 +63,7 @@ public abstract class KafkaConsumerBase : BackgroundService
         {
             BootstrapServers = _settings.BootstrapServers,
             GroupId = KafkaGroupId,
-            AutoOffsetReset = AutoOffsetReset.Latest,
+            AutoOffsetReset = OffsetReset,
             EnableAutoCommit = false,
         };
 
@@ -62,7 +89,7 @@ public abstract class KafkaConsumerBase : BackgroundService
                     "{Consumer} received message. Partition: {Partition}, Offset: {Offset}",
                     GetType().Name, result.Partition.Value, result.Offset.Value);
 
-                await ProcessMessageAsync(result.Message.Value, stoppingToken);
+                await ProcessMessageAsync(result, stoppingToken);
 
                 consumer.Commit(result);
             }
