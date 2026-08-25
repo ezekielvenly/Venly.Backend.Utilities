@@ -14,8 +14,10 @@
   <ItemGroup>
     <PackageReference Include="Confluent.Kafka" Version="2.6.1" />
     <PackageReference Include="MediatR" Version="12.5.0" />
-    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.3" />
-    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.3" />
+    <!-- Microsoft.Extensions.Hosting.Abstractions and .Options.ConfigurationExtensions were referenced here
+         explicitly and are NOT needed: both come in with the shared framework, and NuGet says so with NU1510
+         ("will not be pruned ... does not need to be referenced explicitly"). Removed rather than left as
+         noise on every restore of every service that references this project. -->
   </ItemGroup>
 
   <ItemGroup>
