@@ -22,6 +22,7 @@
     <ProjectReference Include="..\Venly.Messaging.Events\Venly.Messaging.Events.csproj" />
     <ProjectReference Include="..\Venly.Notification.Helper\Venly.Notification.Helper.csproj" />
     <ProjectReference Include="..\Venly.FeatureFlag.Helper\Venly.FeatureFlag.Helper.csproj" />
+    <ProjectReference Include="..\Venly.Audit.Helper\Venly.Audit.Helper.csproj" />
   </ItemGroup>
 
   <ItemGroup>
