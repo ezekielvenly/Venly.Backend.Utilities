@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 
 namespace Venly.Audit.Helper;
 
@@ -60,6 +61,35 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IAuditActorAccessor, HttpContextAuditActorAccessor>();
 
         services.AddSingleton<IHostedService, AuditProducerFlushService>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers <see cref="IAuditMaintenanceClient"/> as a typed HttpClient.
+    ///
+    /// <para>Separate from <see cref="AddVenlyAuditPublisher"/> on purpose. That one is for services that
+    /// PRODUCE audit events, which is nearly all of them; this one is for the single process that runs audit
+    /// maintenance. A service calling the publisher has no business holding AuditService's HMAC secret.</para>
+    /// </summary>
+    public static IServiceCollection AddAuditMaintenanceClient(
+        this IServiceCollection services, IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        services.Configure<AuditMaintenanceClientOptions>(
+            configuration.GetSection(AuditMaintenanceClientOptions.SectionName));
+
+        services.AddHttpClient<IAuditMaintenanceClient, AuditMaintenanceClient>((sp, client) =>
+        {
+            var opts = sp.GetRequiredService<IOptions<AuditMaintenanceClientOptions>>().Value;
+
+            if (!string.IsNullOrWhiteSpace(opts.BaseUrl))
+                client.BaseAddress = new Uri(opts.BaseUrl);
+
+            client.Timeout = TimeSpan.FromSeconds(Math.Max(1, opts.TimeoutSeconds));
+        });
 
         return services;
     }
