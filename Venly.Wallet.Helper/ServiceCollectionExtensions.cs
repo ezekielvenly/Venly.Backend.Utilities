@@ -1,0 +1,36 @@
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+
+namespace Venly.Wallet.Helper;
+
+public static class ServiceCollectionExtensions
+{
+    /// <summary>
+    /// Registers <see cref="IWalletMaintenanceClient"/> as a typed HttpClient.
+    ///
+    /// <para>Only the process that runs wallet maintenance should call this. A service that merely moves money
+    /// has no business holding WalletService's HMAC secret — the same separation
+    /// <c>AddAuditMaintenanceClient</c> draws.</para>
+    /// </summary>
+    public static IServiceCollection AddWalletMaintenanceClient(
+        this IServiceCollection services, IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        services.Configure<WalletClientOptions>(configuration.GetSection(WalletClientOptions.SectionName));
+
+        services.AddHttpClient<IWalletMaintenanceClient, WalletMaintenanceClient>((sp, client) =>
+        {
+            var opts = sp.GetRequiredService<IOptions<WalletClientOptions>>().Value;
+
+            if (!string.IsNullOrWhiteSpace(opts.BaseUrl))
+                client.BaseAddress = new Uri(opts.BaseUrl);
+
+            client.Timeout = TimeSpan.FromSeconds(Math.Max(1, opts.TimeoutSeconds));
+        });
+
+        return services;
+    }
+}

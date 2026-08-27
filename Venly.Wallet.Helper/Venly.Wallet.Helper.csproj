@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!--
+    The same two packages Venly.Notification.Helper takes, and no FrameworkReference. A typed HttpClient plus
+    bound options is all this project needs; pulling in Microsoft.AspNetCore.App would drag the whole shared
+    framework into any process that only wanted to CALL WalletService.
+
+    No project reference on Venly.Backend.Common either. The only thing this client would take from it is the
+    RequestResponse envelope shape, which is one private record here.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.0" />
+  </ItemGroup>
+
+</Project>
