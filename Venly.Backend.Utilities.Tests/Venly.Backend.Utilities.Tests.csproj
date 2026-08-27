@@ -23,6 +23,7 @@
     <ProjectReference Include="..\Venly.Notification.Helper\Venly.Notification.Helper.csproj" />
     <ProjectReference Include="..\Venly.FeatureFlag.Helper\Venly.FeatureFlag.Helper.csproj" />
     <ProjectReference Include="..\Venly.Wallet.Helper\Venly.Wallet.Helper.csproj" />
+    <ProjectReference Include="..\Venly.Rails.Helper\Venly.Rails.Helper.csproj" />
     <ProjectReference Include="..\Venly.Audit.Helper\Venly.Audit.Helper.csproj" />
   </ItemGroup>
 

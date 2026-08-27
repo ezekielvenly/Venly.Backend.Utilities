@@ -8,5 +8,6 @@
   <Project Path="Venly.Audit.Helper/Venly.Audit.Helper.csproj" />
   <Project Path="Venly.FeatureFlag.Helper/Venly.FeatureFlag.Helper.csproj" />
   <Project Path="Venly.Wallet.Helper/Venly.Wallet.Helper.csproj" />
+  <Project Path="Venly.Rails.Helper/Venly.Rails.Helper.csproj" />
   <Project Path="Venly.Backend.Utilities.Tests/Venly.Backend.Utilities.Tests.csproj" />
 </Solution>

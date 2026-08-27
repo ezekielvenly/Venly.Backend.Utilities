@@ -1,0 +1,226 @@
+using System.Net;
+using System.Text;
+using Microsoft.Extensions.Options;
+using Venly.Backend.Utilities.Tests.Notification;
+using Venly.Rails.Helper;
+
+namespace Venly.Backend.Utilities.Tests.Rails;
+
+/// <summary>
+/// The client WalletService's reconciliation PULLS provider balances through. Read-only by design: there is no
+/// payout here, because a ledger that could instruct a payment could move money without an intent.
+/// </summary>
+public class RailsClientTests
+{
+    private static RailsClient NewClient(FakeHttpMessageHandler handler, string secret = "test-secret") =>
+        new(new HttpClient(handler) { BaseAddress = new Uri("https://payment.internal") },
+            Options.Create(new RailsClientOptions { HmacSecret = secret }));
+
+    private static FakeHttpMessageHandler Responding(
+        string json,
+        HttpStatusCode status = HttpStatusCode.OK,
+        Action<HttpRequestMessage, string?>? capture = null) =>
+        new(async (request, ct) =>
+        {
+            var body = request.Content is null ? null : await request.Content.ReadAsStringAsync(ct);
+            capture?.Invoke(request, body);
+
+            return new HttpResponseMessage(status)
+            {
+                Content = new StringContent(json, Encoding.UTF8, "application/json"),
+            };
+        });
+
+    [Fact]
+    public async Task Balances_come_back_in_MINOR_units_with_the_provider_named()
+    {
+        // Minor units because that is what the ledger speaks and PaymentService has already converted at the
+        // provider boundary -- a contract in major units would put the conversion in two places.
+        var handler = Responding("""
+            {"responseCode":200,"responseData":{"provider":"stub","balances":[
+              {"currency":"GBP","availableMinor":123456,"lockedMinor":1000,"ledgerMinor":124456,
+               "rollingReserveMinor":null,"asAt":"2026-08-27T12:00:00Z"}]}}
+            """);
+
+        var result = await NewClient(handler).GetBalancesAsync();
+
+        Assert.Equal("stub", result.Provider);
+        var gbp = Assert.Single(result.Balances);
+        Assert.Equal(123_456, gbp.AvailableMinor);
+        Assert.Equal(124_456, gbp.LedgerMinor);
+        Assert.Null(gbp.RollingReserveMinor);
+    }
+
+    [Fact]
+    public async Task The_provider_name_is_carried_so_a_stub_run_is_distinguishable()
+    {
+        // It lands in external_balance_snapshot.Source, so a reconciliation run against the stub can be told
+        // apart from one against the real provider.
+        var handler = Responding(
+            """{"responseData":{"provider":"fincra","balances":[]}}""");
+
+        Assert.Equal("fincra", (await NewClient(handler).GetBalancesAsync()).Provider);
+    }
+
+    [Fact]
+    public async Task A_balances_read_is_a_signed_GET()
+    {
+        HttpRequestMessage? captured = null;
+        var handler = Responding(
+            """{"responseData":{"provider":"stub","balances":[]}}""",
+            capture: (request, _) => captured = request);
+
+        await NewClient(handler).GetBalancesAsync();
+
+        Assert.Equal(HttpMethod.Get, captured!.Method);
+        Assert.Equal("/internal/payment/rails/balances", captured.RequestUri!.AbsolutePath);
+
+        var timestamp = long.Parse(captured.Headers.GetValues("X-Timestamp").Single());
+        var expected = RailsClient.ComputeSignature(
+            "test-secret", timestamp, "GET", RailsClient.BalancesPath, string.Empty);
+
+        Assert.Equal(expected, captured.Headers.GetValues("X-Signature").Single());
+    }
+
+    [Fact]
+    public void The_signing_string_is_identical_to_every_other_helper_s()
+    {
+        // It is what HmacAuthorizationFilter verifies. Two implementations differing by a newline would each
+        // pass their own tests and fail in production.
+        const string secret = "test-secret";
+        const long timestamp = 1_800_000_000;
+
+        Assert.Equal(
+            Venly.Audit.Helper.AuditMaintenanceClient.ComputeSignature(
+                secret, timestamp, "GET", RailsClient.BalancesPath, string.Empty),
+            RailsClient.ComputeSignature(
+                secret, timestamp, "GET", RailsClient.BalancesPath, string.Empty));
+    }
+
+    [Fact]
+    public async Task A_filtered_read_signs_the_PATH_AND_QUERY()
+    {
+        // The filter hashes what it received, so signing the path alone would fail every filtered read.
+        HttpRequestMessage? captured = null;
+        var handler = Responding("""{"responseData":[]}""", capture: (request, _) => captured = request);
+
+        await NewClient(handler).GetStatementAsync(
+            "GBP", new DateOnly(2026, 8, 1), new DateOnly(2026, 8, 27));
+
+        var path = captured!.RequestUri!.PathAndQuery;
+        var timestamp = long.Parse(captured.Headers.GetValues("X-Timestamp").Single());
+
+        Assert.Contains("currency=GBP", path);
+        Assert.Contains("from=2026-08-01", path);
+        Assert.Equal(
+            RailsClient.ComputeSignature("test-secret", timestamp, "GET", path, string.Empty),
+            captured.Headers.GetValues("X-Signature").Single());
+    }
+
+    [Fact]
+    public async Task Banks_come_back_as_a_list()
+    {
+        var handler = Responding("""
+            {"responseData":[{"code":"000013","name":"GTBank","type":"nuban"}]}
+            """);
+
+        Assert.Equal("000013", Assert.Single(await NewClient(handler).GetBanksAsync("NGN", "NG")).Code);
+    }
+
+    [Fact]
+    public async Task Resolving_an_account_is_a_signed_POST()
+    {
+        HttpRequestMessage? captured = null;
+        string? capturedBody = null;
+
+        var handler = Responding("""
+            {"responseData":{"accountNumber":"0123456789","bankCode":"000013",
+             "accountHolderName":"A N OTHER"}}
+            """,
+            capture: (request, body) => { captured = request; capturedBody = body; });
+
+        var name = await NewClient(handler).ResolveAccountAsync("0123456789", "000013");
+
+        Assert.Equal("A N OTHER", name.AccountHolderName);
+        Assert.Equal(HttpMethod.Post, captured!.Method);
+        Assert.Contains("\"accountNumber\":\"0123456789\"", capturedBody);
+
+        var timestamp = long.Parse(captured.Headers.GetValues("X-Timestamp").Single());
+        Assert.Equal(
+            RailsClient.ComputeSignature(
+                "test-secret", timestamp, "POST", RailsClient.ResolveAccountPath, capturedBody!),
+            captured.Headers.GetValues("X-Signature").Single());
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized)]
+    [InlineData(HttpStatusCode.InternalServerError)]
+    [InlineData(HttpStatusCode.BadGateway)]
+    public async Task A_non_success_THROWS_so_the_activity_retries(HttpStatusCode status)
+    {
+        // A reconciliation that "succeeded" having fetched no balances would report Incomplete on a green
+        // schedule, while the break it should have raised went unnoticed.
+        var handler = Responding("""{"responseMessage":"nope"}""", status);
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => NewClient(handler).GetBalancesAsync());
+    }
+
+    [Fact]
+    public async Task A_200_with_NO_responseData_throws_too()
+    {
+        var handler = Responding("""{"responseCode":200,"responseMessage":"Successful"}""");
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => NewClient(handler).GetBalancesAsync());
+
+        Assert.Contains("never fetched", ex.Message);
+    }
+
+    [Fact]
+    public async Task A_missing_secret_throws_rather_than_signing_with_an_empty_key()
+    {
+        var client = new RailsClient(
+            new HttpClient(Responding("{}")) { BaseAddress = new Uri("https://payment.internal") },
+            Options.Create(new RailsClientOptions()));
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => client.GetBalancesAsync());
+
+        Assert.Contains("HmacSecret", ex.Message);
+    }
+
+    [Fact]
+    public void There_is_no_PAYOUT_on_this_client_and_that_is_deliberate()
+    {
+        // WalletService is the ledger. A ledger that could instruct a payment could move money without an
+        // intent -- the instruction direction is the other way round, with PaymentService driving WalletService
+        // from provider outcomes.
+        var methods = typeof(IRailsClient).GetMethods().Select(m => m.Name).ToList();
+
+        Assert.DoesNotContain(methods, m => m.Contains("Payout", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(methods, m => m.Contains("Convert", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(methods, m => m.Contains("Quote", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Every_path_is_under_internal_payment()
+    {
+        foreach (var path in new[]
+        {
+            RailsClient.BalancesPath, RailsClient.StatementPath,
+            RailsClient.BanksPath, RailsClient.ResolveAccountPath,
+        })
+        {
+            Assert.StartsWith("/internal/payment/", path, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void The_timeout_is_LONGER_than_the_wallet_client_s()
+    {
+        // Every call behind this one reaches an external provider, and PaymentService allows that provider
+        // thirty seconds of its own -- so a shorter timeout here would abandon a request still in flight and
+        // report a failure the provider never had.
+        Assert.True(new RailsClientOptions().TimeoutSeconds
+                    > new Venly.Wallet.Helper.WalletClientOptions().TimeoutSeconds);
+    }
+}
