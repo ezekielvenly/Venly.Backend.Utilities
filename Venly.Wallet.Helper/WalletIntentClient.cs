@@ -91,6 +91,68 @@ public sealed class WalletIntentClient(
         return (result, result.IsSuccess ? Read<WalletIntentLookup>(body) : null);
     }
 
+    public async Task<(WalletCallResult Result, WalletIntentLookup? Intent)> CreatePayoutAsync(
+        CreatePayoutIntentRequest request, CancellationToken ct = default)
+    {
+        // Shaped here rather than by the caller, exactly as funding is, and for the mirror-image reason: a
+        // caller that could set `kind` could turn a funding webhook into a payout. The kind is a property of
+        // WHICH METHOD was called, which makes it something the type system decides instead of a string.
+        var payload = new
+        {
+            kind = "Payout",
+            customerId = request.CustomerId,
+            currency = request.Currency,
+            amount = request.Amount,
+            destinationCurrency = request.DestinationCurrency,
+            destinationAmount = request.DestinationAmount,
+            quotedRate = request.QuotedRate,
+            quoteSource = request.QuoteSource,
+            quoteExpiresAt = request.QuoteExpiresAt,
+            idempotencyKey = request.IdempotencyKey,
+            correlationId = request.CorrelationId,
+            narration = request.Narration,
+        };
+
+        var (status, body) = await SendAsync(HttpMethod.Post, IntentsPath, payload, ct);
+        var result = new WalletCallResult(status, Message(body));
+
+        return (result, result.IsSuccess ? Read<WalletIntentLookup>(body) : null);
+    }
+
+    public async Task<(WalletCallResult Result, WalletIntentLookup? Intent)> CreateInternalTransferAsync(
+        CreateInternalTransferIntentRequest request, CancellationToken ct = default)
+    {
+        // Same currency on both sides by construction: a wallet-to-wallet movement inside SendGram has no
+        // provider to convert through, so there is no second currency for a caller to name.
+        var payload = new
+        {
+            kind = "InternalTransfer",
+            customerId = request.CustomerId,
+            destinationCustomerId = request.DestinationCustomerId,
+            currency = request.Currency,
+            amount = request.Amount,
+            destinationCurrency = request.Currency,
+            destinationAmount = request.Amount,
+            idempotencyKey = request.IdempotencyKey,
+            correlationId = request.CorrelationId,
+            narration = request.Narration,
+        };
+
+        var (status, body) = await SendAsync(HttpMethod.Post, IntentsPath, payload, ct);
+        var result = new WalletCallResult(status, Message(body));
+
+        return (result, result.IsSuccess ? Read<WalletIntentLookup>(body) : null);
+    }
+
+    public async Task<WalletCallResult> CancelAsync(
+        string intentId, string reason, CancellationToken ct = default)
+    {
+        var (status, body) = await SendAsync(
+            HttpMethod.Post, $"{IntentsPath}/{intentId}/cancel", new { reason }, ct);
+
+        return new WalletCallResult(status, Message(body));
+    }
+
     public async Task<WalletCallResult> RecordFxRealisationAsync(
         string intentId, decimal realisedRate, string? providerReference, CancellationToken ct = default)
     {
